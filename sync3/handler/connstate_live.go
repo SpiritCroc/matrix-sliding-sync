@@ -215,6 +215,7 @@ func (s *connStateLive) processLiveUpdate(ctx context.Context, up caches.Update,
 
 		r.HighlightCount = int64(userRoomData.HighlightCount)
 		r.NotificationCount = int64(userRoomData.NotificationCount)
+        r.UnreadCount = int64(userRoomData.UnreadCount)
 		if roomEventUpdate != nil && roomEventUpdate.EventData.Event != nil {
 			r.NumLive++
 			advancedPastEvent := false
@@ -287,7 +288,7 @@ func (s *connStateLive) processLiveUpdate(ctx context.Context, up caches.Update,
 			}
 			response.Rooms[roomUpdate.RoomID()] = thisRoom
 		}
-		if delta.HighlightCountChanged || delta.NotificationCountChanged {
+		if delta.HighlightCountChanged || delta.NotificationCountChanged || delta.UnreadCountChanged {
 			if !exists {
 				// we need to make this room exist. Other deltas are caused by events so the room exists,
 				// but highlight/notif counts are silent
@@ -295,6 +296,7 @@ func (s *connStateLive) processLiveUpdate(ctx context.Context, up caches.Update,
 			}
 			thisRoom.NotificationCount = int64(roomUpdate.UserRoomMetadata().NotificationCount)
 			thisRoom.HighlightCount = int64(roomUpdate.UserRoomMetadata().HighlightCount)
+			thisRoom.UnreadCount = int64(roomUpdate.UserRoomMetadata().UnreadCount)
 			response.Rooms[roomUpdate.RoomID()] = thisRoom
 		}
 	}

@@ -38,6 +38,7 @@ type RoomDelta struct {
 	InviteCountChanged       bool
 	NotificationCountChanged bool
 	HighlightCountChanged    bool
+	UnreadCountChanged       bool
 	Lists                    []RoomListDelta
 }
 
@@ -64,6 +65,9 @@ func (s *InternalRequestLists) SetRoom(r RoomConnMetadata) (delta RoomDelta) {
 		}
 		if existing.HighlightCount != r.HighlightCount {
 			delta.HighlightCountChanged = true
+		}
+		if existing.UnreadCount != r.UnreadCount {
+			delta.UnreadCountChanged = true
 		}
 		delta.InviteCountChanged = !existing.SameInviteCount(&r.RoomMetadata)
 		delta.JoinCountChanged = !existing.SameJoinCount(&r.RoomMetadata)

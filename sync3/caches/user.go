@@ -40,6 +40,7 @@ type UserRoomData struct {
 	HasLeft           bool
 	NotificationCount int
 	HighlightCount    int
+	UnreadCount       int
 	Invite            *InviteData
 
 	// TODO: should CanonicalisedName really be in RoomConMetadata? It's only set in SetRoom AFAICS
@@ -535,7 +536,7 @@ func (c *UserCache) emitOnUpdate(ctx context.Context, update Update) {
 	}
 }
 
-func (c *UserCache) OnUnreadCounts(ctx context.Context, roomID string, highlightCount, notifCount *int) {
+func (c *UserCache) OnUnreadCounts(ctx context.Context, roomID string, highlightCount, notifCount, unreadCount *int) {
 	data := c.LoadRoomData(roomID)
 	hasCountDecreased := false
 	if highlightCount != nil {
@@ -548,6 +549,9 @@ func (c *UserCache) OnUnreadCounts(ctx context.Context, roomID string, highlight
 		}
 		data.NotificationCount = *notifCount
 	}
+    if unreadCount != nil {
+        data.UnreadCount = *unreadCount
+    }
 	c.roomToDataMu.Lock()
 	c.roomToData[roomID] = data
 	c.roomToDataMu.Unlock()

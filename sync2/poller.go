@@ -51,7 +51,7 @@ type V2DataReceiver interface {
 	// Return an error to stop the since token advancing.
 	AddToDeviceMessages(ctx context.Context, userID, deviceID string, msgs []json.RawMessage) error
 	// UpdateUnreadCounts sets the highlight_count and notification_count for this user in this room.
-	UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount *int)
+	UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount, unreadCount *int)
 	// Set the latest account data for this user.
 	// Return an error to stop the since token advancing.
 	OnAccountData(ctx context.Context, userID, roomID string, events []json.RawMessage) error // ping update with types? Can you race when re-querying?
@@ -383,11 +383,11 @@ func (h *PollerMap) OnExpiredToken(ctx context.Context, accessTokenHash, userID,
 	h.callbacks.OnExpiredToken(ctx, accessTokenHash, userID, deviceID)
 }
 
-func (h *PollerMap) UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount *int) {
+func (h *PollerMap) UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount, unreadCount *int) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	h.executor <- func() {
-		h.callbacks.UpdateUnreadCounts(ctx, roomID, userID, highlightCount, notifCount)
+		h.callbacks.UpdateUnreadCounts(ctx, roomID, userID, highlightCount, notifCount, unreadCount)
 		wg.Done()
 	}
 	wg.Wait()
@@ -875,8 +875,8 @@ func (p *poller) parseRoomsResponse(ctx context.Context, res *SyncResponse) erro
 		// process unread counts AFTER events so global caches have been updated by the time this metadata is added.
 		// Previously we did this BEFORE events so we atomically showed the event and the unread count in one go, but
 		// this could cause clients to de-sync: see TestUnreadCountMisordering integration test.
-		if roomData.UnreadNotifications.HighlightCount != nil || roomData.UnreadNotifications.NotificationCount != nil {
-			p.receiver.UpdateUnreadCounts(ctx, roomID, p.userID, roomData.UnreadNotifications.HighlightCount, roomData.UnreadNotifications.NotificationCount)
+		if roomData.UnreadNotifications.HighlightCount != nil || roomData.UnreadNotifications.NotificationCount != nil || roomData.UnreadCount != nil {
+			p.receiver.UpdateUnreadCounts(ctx, roomID, p.userID, roomData.UnreadNotifications.HighlightCount, roomData.UnreadNotifications.NotificationCount, roomData.UnreadCount)
 		}
 	}
 	for roomID, roomData := range res.Rooms.Leave {

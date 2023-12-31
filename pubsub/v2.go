@@ -62,6 +62,7 @@ type V2UnreadCounts struct {
 	RoomID            string
 	HighlightCount    *int
 	NotificationCount *int
+	UnreadCount       *int
 }
 
 func (*V2UnreadCounts) Type() string { return "V2UnreadCounts" }

@@ -17,6 +17,7 @@ type Room struct {
 	InviteState       []json.RawMessage `json:"invite_state,omitempty"`
 	NotificationCount int64             `json:"notification_count"`
 	HighlightCount    int64             `json:"highlight_count"`
+	UnreadCount       int64             `json:"org.matrix.msc2654.unread_count,omitempty"`
 	Initial           bool              `json:"initial,omitempty"`
 	IsDM              bool              `json:"is_dm,omitempty"`
 	JoinedCount       int               `json:"joined_count,omitempty"`

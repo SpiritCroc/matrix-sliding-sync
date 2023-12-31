@@ -215,6 +215,7 @@ type SyncV2JoinResponse struct {
 	Ephemeral           EventsResponse      `json:"ephemeral"`
 	AccountData         EventsResponse      `json:"account_data"`
 	UnreadNotifications UnreadNotifications `json:"unread_notifications"`
+	UnreadCount         *int                `json:"org.matrix.msc2654.unread_count,omitempty"`
 }
 
 type UnreadNotifications struct {

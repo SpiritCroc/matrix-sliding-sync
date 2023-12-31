@@ -678,6 +678,7 @@ func (s *ConnState) getInitialRoomData(ctx context.Context, roomSub sync3.RoomSu
 			AvatarChange:      sync3.NewAvatarChange(internal.CalculateAvatar(metadata)),
 			NotificationCount: int64(userRoomData.NotificationCount),
 			HighlightCount:    int64(userRoomData.HighlightCount),
+			UnreadCount:       int64(userRoomData.UnreadCount),
 			Timeline:          roomToTimeline[roomID],
 			RequiredState:     requiredState,
 			InviteState:       inviteState,

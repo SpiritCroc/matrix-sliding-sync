@@ -42,6 +42,7 @@ type Handler struct {
 	unreadMap      map[string]struct {
 		Highlight int
 		Notif     int
+		Unread    int
 	}
 	// room_id -> PollerID, stores which Poller is allowed to update typing notifications
 	typingHandler map[string]sync2.PollerID
@@ -68,6 +69,7 @@ func NewHandler(
 		unreadMap: make(map[string]struct {
 			Highlight int
 			Notif     int
+            Unread    int
 		}),
 		accountDataMap:   &sync.Map{},
 		typingMu:         &sync.Mutex{},
@@ -444,7 +446,7 @@ func (h *Handler) AddToDeviceMessages(ctx context.Context, userID, deviceID stri
 	return nil
 }
 
-func (h *Handler) UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount *int) {
+func (h *Handler) UpdateUnreadCounts(ctx context.Context, roomID, userID string, highlightCount, notifCount, unreadCount *int) {
 	// only touch the DB and notify if they have changed. sync v2 will alwyas include the counts
 	// even if they haven't changed :(
 	key := roomID + userID
@@ -457,18 +459,24 @@ func (h *Handler) UpdateUnreadCounts(ctx context.Context, roomID, userID string,
 	if notifCount != nil {
 		nc = *notifCount
 	}
-	if ok && entry.Highlight == hc && entry.Notif == nc {
+    uc := 0
+	if unreadCount != nil {
+		uc = *unreadCount
+	}
+	if ok && entry.Highlight == hc && entry.Notif == nc && entry.Unread == uc {
 		return // dupe
 	}
 	h.unreadMap[key] = struct {
 		Highlight int
 		Notif     int
+        Unread    int
 	}{
 		Highlight: hc,
 		Notif:     nc,
+        Unread:    uc,
 	}
 
-	err := h.Store.UnreadTable.UpdateUnreadCounters(userID, roomID, highlightCount, notifCount)
+	err := h.Store.UnreadTable.UpdateUnreadCounters(userID, roomID, highlightCount, notifCount, unreadCount)
 	if err != nil {
 		logger.Err(err).Str("user", userID).Str("room", roomID).Msg("failed to update unread counters")
 		internal.GetSentryHubFromContextOrDefault(ctx).CaptureException(err)
@@ -478,6 +486,7 @@ func (h *Handler) UpdateUnreadCounts(ctx context.Context, roomID, userID string,
 		UserID:            userID,
 		HighlightCount:    highlightCount,
 		NotificationCount: notifCount,
+        UnreadCount:       unreadCount,
 	})
 }
 

@@ -17,15 +17,16 @@ func NewUnreadTable(db *sqlx.DB) *UnreadTable {
 		user_id TEXT NOT NULL,
 		notification_count BIGINT NOT NULL DEFAULT 0,
 		highlight_count BIGINT NOT NULL DEFAULT 0,
+		unread_count BIGINT NOT NULL DEFAULT 0,
 		UNIQUE(user_id, room_id)
 	);
 	`)
 	return &UnreadTable{db}
 }
 
-func (t *UnreadTable) SelectAllNonZeroCountsForUser(userID string, callback func(roomID string, highlightCount, notificationCount int)) error {
+func (t *UnreadTable) SelectAllNonZeroCountsForUser(userID string, callback func(roomID string, highlightCount, notificationCount, unreadCount int)) error {
 	rows, err := t.db.Query(
-		`SELECT room_id, notification_count, highlight_count FROM syncv3_unread WHERE user_id=$1 AND (notification_count > 0 OR highlight_count > 0)`,
+		`SELECT room_id, notification_count, highlight_count, unread_count FROM syncv3_unread WHERE user_id=$1 AND (notification_count > 0 OR highlight_count > 0)`,
 		userID,
 	)
 	if err != nil {
@@ -36,10 +37,11 @@ func (t *UnreadTable) SelectAllNonZeroCountsForUser(userID string, callback func
 		var roomID string
 		var highlightCount int
 		var notifCount int
-		if err := rows.Scan(&roomID, &notifCount, &highlightCount); err != nil {
+        var unreadCount int
+		if err := rows.Scan(&roomID, &notifCount, &highlightCount, &unreadCount); err != nil {
 			return err
 		}
-		callback(roomID, highlightCount, notifCount)
+		callback(roomID, highlightCount, notifCount, unreadCount)
 	}
 	return nil
 }
@@ -51,7 +53,7 @@ func (t *UnreadTable) SelectUnreadCounters(userID, roomID string) (highlightCoun
 	return
 }
 
-func (t *UnreadTable) UpdateUnreadCounters(userID, roomID string, highlightCount, notificationCount *int) error {
+func (t *UnreadTable) UpdateUnreadCounters(userID, roomID string, highlightCount, notificationCount, unreadCount *int) error {
 	var err error
 	if highlightCount != nil && notificationCount != nil {
 		_, err = t.db.Exec(
@@ -70,6 +72,15 @@ func (t *UnreadTable) UpdateUnreadCounters(userID, roomID string, highlightCount
 			`INSERT INTO syncv3_unread(room_id, user_id, notification_count) VALUES($1, $2, $3)
 		ON CONFLICT (room_id, user_id) DO UPDATE SET notification_count = $3`,
 			roomID, userID, *notificationCount,
+		)
+	}
+    if unreadCount != nil {
+        // TODO we're ignoring error here right now, there's probably a better way
+        // without making above if-else construct exponentially large
+		_, _ = t.db.Exec(
+			`INSERT INTO syncv3_unread(room_id, user_id, unread_count) VALUES($1, $2, $3)
+		ON CONFLICT (room_id, user_id) DO UPDATE SET unread_count = $3`,
+			roomID, userID, *unreadCount,
 		)
 	}
 	return err

@@ -124,6 +124,9 @@ const accumulateRoomData = (roomId, r) => {
         if (r.notification_count !== undefined) {
             existingRoom.notification_count = r.notification_count;
         }
+        if (r.unread_count !== undefined) {
+            existingRoom.unread_count = r.unread_count;
+        }
         if (r.timeline) {
             r.timeline.forEach((e) => {
                 existingRoom.timeline.push(e);

@@ -530,8 +530,8 @@ func (h *SyncLiveHandler) userCache(userID string) (*caches.UserCache, error) {
 	}
 	uc := caches.NewUserCache(userID, h.GlobalCache, h.Storage, h)
 	// select all non-zero highlight or notif counts and set them, as this is less costly than looping every room/user pair
-	err := h.Storage.UnreadTable.SelectAllNonZeroCountsForUser(userID, func(roomID string, highlightCount, notificationCount int) {
-		uc.OnUnreadCounts(context.Background(), roomID, &highlightCount, &notificationCount)
+	err := h.Storage.UnreadTable.SelectAllNonZeroCountsForUser(userID, func(roomID string, highlightCount, notificationCount, unreadCount int) {
+		uc.OnUnreadCounts(context.Background(), roomID, &highlightCount, &notificationCount, &unreadCount)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load unread counts: %s", err)
@@ -699,7 +699,7 @@ func (h *SyncLiveHandler) OnUnreadCounts(p *pubsub.V2UnreadCounts) {
 	if !ok {
 		return
 	}
-	userCache.(*caches.UserCache).OnUnreadCounts(ctx, p.RoomID, p.HighlightCount, p.NotificationCount)
+	userCache.(*caches.UserCache).OnUnreadCounts(ctx, p.RoomID, p.HighlightCount, p.NotificationCount, p.UnreadCount)
 }
 
 // push device data updates on waiting conns (otk counts, device list changes)

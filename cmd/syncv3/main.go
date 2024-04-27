@@ -28,7 +28,7 @@ import (
 
 var GitCommit string
 
-const version = "0.99.15"
+const version = "0.99.16"
 
 var (
 	flags = flag.NewFlagSet("goose", flag.ExitOnError)
@@ -220,6 +220,7 @@ func main() {
 	})
 
 	go h2.StartV2Pollers()
+	go h2.Store.Cleaner(time.Hour)
 	if args[EnvOTLP] != "" {
 		h3 = otelhttp.NewHandler(h3, "Sync")
 	}

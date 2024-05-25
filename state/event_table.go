@@ -312,14 +312,35 @@ func (t *EventTable) UpdateBeforeSnapshotID(txn *sqlx.Tx, eventNID, snapID, repl
 	return err
 }
 
-// query the latest events in each of the room IDs given, using highestNID as the highest event.
+// LatestEventInRooms queries the latest events in each of the room IDs given, using highestNID as the highest event.
+//
+// The following query does:
+//
+//  1. Create a list of the passed in roomIDs (`room_ids` CTE)
+//  2. Fetches the highest event_nid before or equal to $2 for each room in room_ids (`max_ev_nid` CTE)
+//  3. Fetches the latest events for each room using the data provided from room_ids and max_ev_nid (the `evs` LATERAL)
 func (t *EventTable) LatestEventInRooms(txn *sqlx.Tx, roomIDs []string, highestNID int64) (events []Event, err error) {
-	// the position (event nid) may be for a random different room, so we need to find the highest nid <= this position for this room
 	err = txn.Select(
 		&events,
-		`SELECT event_nid, room_id, event_replaces_nid, before_state_snapshot_id, event_type, state_key, event FROM syncv3_events
-		WHERE event_nid IN (SELECT max(event_nid) FROM syncv3_events WHERE event_nid <= $1 AND room_id = ANY($2) GROUP BY room_id)`,
-		highestNID, pq.StringArray(roomIDs),
+		`
+WITH room_ids AS (
+    select unnest($1::text[]) AS room_id
+),
+max_ev_nid AS (
+	SELECT * 
+	FROM room_ids,
+    	LATERAL (
+        	SELECT max(event_nid) FROM syncv3_events e WHERE e.room_id = room_ids.room_id AND event_nid <= $2
+            ) AS x)
+SELECT evs.*
+FROM room_ids,
+     max_ev_nid,
+     LATERAL (
+         SELECT event_nid, room_id, event_replaces_nid, before_state_snapshot_id, event_type, state_key, event
+         FROM syncv3_events e
+         WHERE e.event_nid = max_ev_nid.max AND room_ids.room_id = e.room_id
+         ) AS evs`,
+		pq.StringArray(roomIDs), highestNID,
 	)
 	if err == sql.ErrNoRows {
 		err = nil
@@ -327,14 +348,26 @@ func (t *EventTable) LatestEventInRooms(txn *sqlx.Tx, roomIDs []string, highestN
 	return
 }
 
+// LatestEventNIDInRooms queries the latest events in each of the room IDs given, using highestNID as the highest event.
+//
+// The following query does:
+//
+//  1. Create a list of the passed in roomIDs (`room_ids` CTE)
+//  2. Fetches the latest eventNIDs for each room using the data provided from room_ids (the `evs` LATERAL)
 func (t *EventTable) LatestEventNIDInRooms(txn *sqlx.Tx, roomIDs []string, highestNID int64) (roomToNID map[string]int64, err error) {
-	// the position (event nid) may be for a random different room, so we need to find the highest nid <= this position for this room
 	var events []Event
 	err = txn.Select(
 		&events,
-		`SELECT event_nid, room_id FROM syncv3_events
-		WHERE event_nid IN (SELECT max(event_nid) FROM syncv3_events WHERE event_nid <= $1 AND room_id = ANY($2) GROUP BY room_id)`,
-		highestNID, pq.StringArray(roomIDs),
+		`
+WITH room_ids AS (
+    select unnest($1::text[]) AS room_id
+)
+SELECT evs.event_nid, room_id
+FROM room_ids, 
+    LATERAL (
+            SELECT max(event_nid) event_nid FROM syncv3_events e WHERE e.room_id = room_ids.room_id AND event_nid <= $2
+            ) AS evs WHERE event_nid IS NOT NULL;`,
+		pq.StringArray(roomIDs), highestNID,
 	)
 	if err == sql.ErrNoRows {
 		err = nil
@@ -408,18 +441,29 @@ func (t *EventTable) SelectLatestEventsBetween(txn *sqlx.Tx, roomID string, lowe
 
 func (t *EventTable) selectLatestEventByTypeInAllRooms(txn *sqlx.Tx) ([]Event, error) {
 	result := []Event{}
-	// TODO: this query ends up doing a sequential scan on the events table. We have
-	// an index on (event_type, room_id, event_nid) so I'm a little surprised that PG
-	// decides to do so. Can we do something better here? Ideas:
-	// - Find a better query for selecting the newest event of each type in a room.
-	// - At present we only care about the _timestamps_ of these events. Perhaps we
-	//   could store those in the DB (and even in an index) as a column and select
-	//   those, to avoid having to parse the event bodies.
-	// - We could have the application maintain a `latest_events` table so that the
-	//   rows can be directly read. Assuming a mostly-static set of event types, reads
-	//   are then linear in the number of rooms.
-	rows, err := txn.Query(
-		`SELECT room_id, event_nid, event FROM syncv3_events WHERE event_nid in (SELECT MAX(event_nid) FROM syncv3_events GROUP BY room_id, event_type)`,
+	// What the following query does:
+	//	1. Gets all event types from a recursive CTE as the `event_types` CTE
+	//	2. Gets all rooms as the `room_ids` CTE
+	// 	3. Gets the latest event_nid for each event_type and room as the `max_by_ev_type` CTE
+	//	4. Queries the required data using the event_nids provided by the `max_by_ev_type` CTE
+	rows, err := txn.Query(`
+WITH event_types AS (
+    WITH RECURSIVE t AS (
+        (SELECT event_type FROM syncv3_events ORDER BY event_type LIMIT 1)  -- parentheses required
+        UNION ALL
+        SELECT (SELECT event_type FROM syncv3_events WHERE event_type > t.event_type ORDER BY event_type LIMIT 1)
+        FROM t
+        WHERE t.event_type IS NOT NULL
+    )
+    SELECT event_type FROM t WHERE event_type IS NOT NULL
+), room_ids AS (
+    SELECT DISTINCT room_id FROM syncv3_rooms
+), max_by_ev_type AS (
+    SELECT m.max FROM event_types, room_ids,
+    LATERAL ( SELECT max(event_nid) as max FROM syncv3_events e WHERE e.room_id = room_ids.room_id AND e.event_type = event_types.event_type ) AS m
+)
+SELECT room_id, event_nid, event FROM syncv3_events, max_by_ev_type WHERE event_nid = max_by_ev_type.max
+`,
 	)
 	if err != nil {
 		return nil, err

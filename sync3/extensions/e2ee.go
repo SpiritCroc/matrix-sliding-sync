@@ -70,11 +70,16 @@ func (r *E2EERequest) ProcessInitial(ctx context.Context, res *Response, extCtx 
 		extRes.OTKCounts = dd.OTKCounts
 		hasUpdates = true
 	}
-	changed, left := internal.DeviceListChangesArrays(dd.DeviceLists.Sent)
-	if len(changed) > 0 || len(left) > 0 {
+	if dd.DeviceListChanged == nil {
+		dd.DeviceListChanged = make([]string, 0)
+	}
+	if dd.DeviceListLeft == nil {
+		dd.DeviceListLeft = make([]string, 0)
+	}
+	if len(dd.DeviceListChanged) > 0 || len(dd.DeviceListLeft) > 0 {
 		extRes.DeviceLists = &E2EEDeviceList{
-			Changed: changed,
-			Left:    left,
+			Changed: dd.DeviceListChanged,
+			Left:    dd.DeviceListLeft,
 		}
 		hasUpdates = true
 	}
